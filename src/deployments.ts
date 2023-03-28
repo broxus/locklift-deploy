@@ -28,8 +28,13 @@ export class Deployments<T extends FactoryType = FactoryType> {
     private readonly networkId: number,
   ) {
     fs.ensureDirSync(path.resolve(deployFolderPath));
-    this.pathToNetworkFolder = path.join(deployFolderPath, this.network);
+    this.pathToNetworkFolder = path.join("deployments", this.network);
+
     fs.ensureDirSync(this.pathToNetworkFolder);
+    fs.writeFileSync(
+      `${this.pathToNetworkFolder}/.networkInfo.json`,
+      JSON.stringify({ chainId: this.networkId }, null, 4),
+    );
   }
 
   private getLogContent = (): Array<WriteDeployInfo> => {

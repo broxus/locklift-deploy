@@ -24,7 +24,7 @@ addPlugin({
       throw new Error("Deployments can't be run without network");
     }
     const networkID = await locklift.provider.getProviderState().then((res) => res.networkId);
-    return new Deployments(locklift, path.resolve("deployments"), network, networkID);
+    return new Deployments(locklift, path.resolve("deploy"), network, networkID);
   },
 
   commandBuilders: [

@@ -26,10 +26,12 @@ Inside this folder, we are going to create our first files let's call them `depl
 │   └── 1-deploy-sample.ts
 ├── test
 │   └── sample-test.ts
-└─── deployments
-      ├── {network} // log folder related to the particular network
-      ├── crate-account.ts // deploy file
-      └── deploy-sample.ts // deploy file
+├── deploy
+│     ├── crate-account.ts // deploy file
+│     └── deploy-sample.ts // deploy file
+└── deployments
+      └── {network} // log folder related to the particular network
+            └── .networkInfo.json
 ```
 #### Note deploy files have so particular structure, the file should include:
 1. export default function, that is returns the promise
