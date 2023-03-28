@@ -17,7 +17,8 @@ declare module "locklift" {
 
 ### Usage
 First of all, need to generate deployments folders, it can be done by run the command `npx locklift deploy -n local` in a terminal.
-Inside this folder, we are going to create our first files let's call them `deploy-sample.ts` and `crate-account.ts`.So our project structure will look like this
+Inside this folder, we are going to create our first files let's call them `deploy-sample.ts` and `crate-account.ts` inside the `deploy`.
+So our project structure will look like this
 ```
 ├── contracts
 │   └── Sample.tsol
