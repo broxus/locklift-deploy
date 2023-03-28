@@ -323,16 +323,17 @@ export class Deployments<T extends FactoryType = FactoryType> {
         `${notResolvedDependencies.map(({ tag }) => `Tag ${tag} can't be initialized without required dependencies`)}`,
       );
     }
-
-    await lastValueFrom(
-      from(includedDependencies).pipe(
-        concatMap(({ default: deployFunction, tag }) => {
-          if (deployFunction && "name" in deployFunction) {
-            return deployFunction();
-          }
-          return of(undefined);
-        }),
-      ),
-    );
+    if (includedDependencies.length > 0) {
+      await lastValueFrom(
+        from(includedDependencies).pipe(
+          concatMap(({ default: deployFunction, tag }) => {
+            if (deployFunction && "name" in deployFunction) {
+              return deployFunction();
+            }
+            return of(undefined);
+          }),
+        ),
+      );
+    }
   };
 }

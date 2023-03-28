@@ -16,7 +16,7 @@ declare module "locklift" {
 ```
 
 ### Usage
-First of all, need to create `deploy folder (it will `deploy` or a folder that was provided inside the config).
+First of all, need to generate deployments folders, it can be done by run the command `npx locklift deploy -n local` in a terminal.
 Inside this folder, we are going to create our first files let's call them `deploy-sample.ts` and `crate-account.ts`.So our project structure will look like this
 ```
 ├── contracts
@@ -27,8 +27,9 @@ Inside this folder, we are going to create our first files let's call them `depl
 ├── test
 │   └── sample-test.ts
 └─── deployments
-      └── {network}
-            └── crate-account.ts
+      ├── {network} // log folder related to the particular network
+      ├── crate-account.ts // deploy file
+      └── deploy-sample.ts // deploy file
 ```
 #### Note deploy files have so particular structure, the file should include:
 1. export default function, that is returns the promise
@@ -52,7 +53,7 @@ export const dependencies = ["sample2", "sample3", "sample4"];
 export default async () => {
    await locklift.deployments.createAccounts([
               {
-                 accountName: "Deployer", // custom account name, this name will be used for getting access to the account
+                 deploymentName: "Deployer", // custom account name, this name will be used for getting access to the account
                  signerId: "0", // locklift.keystore.getSigner("0") <- this is id for getting access to the particular signer
                  accountSettings: {
                     type: WalletTypes.EverWallet,
@@ -85,7 +86,7 @@ export default async () => {
                 },
                 value: locklift.utils.toNano(2),
             },
-            contractName: "Sample1",// custom contract name, this name will be used for getting an access
+            deploymentName: "Sample1",// custom contract name, this name will be used for getting an access
         },
         true // enableLogs
     );
