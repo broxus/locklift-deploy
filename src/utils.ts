@@ -14,11 +14,15 @@ export const calculateDependenciesCount = (
   if (!searchedEl.dependencies) {
     return { deep: 0, deps: [] };
   }
+  if (tag !== initialTag && initialTag === searchedEl.tag) {
+    throw new Error(`Tag ${initialTag} defined twice or more`);
+  }
   return searchedEl.dependencies.reduce(
     (acc, next) => {
       if (initialTag === next) {
         throw new Error(`The tag can't depend on self, tag: ${initialTag}, conflict with ${searchedEl.tag}`);
       }
+
       const { deps, deep } = calculateDependenciesCount(arr, next, initialTag);
       return {
         deps: [...acc.deps, ...deps],
