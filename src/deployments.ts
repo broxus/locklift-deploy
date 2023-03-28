@@ -6,103 +6,132 @@ import {
   CreateAccountParams,
   CreateAccountParamsWithoutPk,
   DeployContractParams,
-  LogStruct,
+  WriteDeployContractInfo,
+  WriteDeployInfo,
 } from "./types";
 import path from "path";
 import fs from "fs-extra";
-import { concatMap, defer, from, lastValueFrom, mergeMap, of, tap, toArray } from "rxjs";
-import { calculateDependenciesCount } from "./utils";
+import { concatMap, defer, from, lastValueFrom, map, mergeMap, of, tap, toArray } from "rxjs";
+import { calculateDependenciesCount, isT } from "./utils";
+import { Account } from "locklift/everscale-client";
 
 export class Deployments<T extends FactoryType = FactoryType> {
   deploymentsStore: Record<string, Contract<any>> = {};
   accountsStore: Record<string, AccountWithSigner> = {};
-  private readonly pathToLogFile: string;
-  constructor(private readonly locklift: Locklift<T>, private readonly deployFolderPath: string) {
+  // private readonly pathToLogFile: string;
+  private readonly pathToNetworkFolder: string;
+  constructor(
+    private readonly locklift: Locklift<T>,
+    private readonly deployFolderPath: string,
+    private readonly network: string,
+    private readonly networkId: number,
+  ) {
     fs.ensureDirSync(path.resolve(deployFolderPath));
-    this.pathToLogFile = path.resolve(deployFolderPath, "log.json");
-    if (!fs.existsSync(this.pathToLogFile)) {
-      this.createNewLogFile();
-    }
+    this.pathToNetworkFolder = path.join(deployFolderPath, this.network);
+    fs.ensureDirSync(this.pathToNetworkFolder);
   }
 
-  private createNewLogFile = () => {
-    fs.ensureDirSync(path.resolve(this.pathToLogFile));
-    fs.writeFileSync(
-      this.pathToLogFile,
-      JSON.stringify({
-        contracts: {},
-        accounts: {},
-      }),
-    );
+  private getLogContent = (): Array<WriteDeployInfo> => {
+    const files = fs.readdirSync(this.pathToNetworkFolder);
+    return files
+      .filter((file) => file.endsWith("json"))
+      .map((fileName) => {
+        try {
+          const deployInfo = JSON.parse(
+            fs.readFileSync(path.join(this.pathToNetworkFolder, fileName), "utf-8"),
+          ) as WriteDeployInfo;
+          if (deployInfo.type === "Contract" || deployInfo.type === "Account") {
+            return deployInfo;
+          }
+        } catch {}
+      })
+      .filter(isT);
   };
-  private getLogContent = (): LogStruct<T> => {
-    return JSON.parse(fs.readFileSync(this.pathToLogFile, "utf8")) as LogStruct<T>;
+
+  private getAccountOrContractFilePath = (deploymentName: string, type: "Account" | "Contract") =>
+    path.join(this.pathToNetworkFolder, `${type}__${deploymentName}.json`);
+
+  private writeDeployInfo = (deployInfo: WriteDeployInfo) => {
+    const fileName = this.getAccountOrContractFilePath(deployInfo.deploymentName, deployInfo.type);
+    fs.writeFileSync(fileName, JSON.stringify(deployInfo, null, 4));
   };
-  private writeToLogFile = (
-    writeValue:
-      | { type: "contract"; deployContract: DeployContractParams<T>; name: string; address: string }
-      | { type: "account"; createAccount: CreateAccountParams; signerId: string; name: string; address: string },
-  ) => {
-    const log = this.getLogContent();
-    switch (writeValue.type) {
-      case "account":
-        log.accounts = {
-          ...log.accounts,
-          [writeValue.name]: {
-            ...writeValue.createAccount,
-            address: writeValue.address,
-            signerId: writeValue.signerId,
-          },
-        };
-        break;
-      case "contract":
-        log.contracts = {
-          ...log.contracts,
-          [writeValue.name]: { deployContractParams: writeValue.deployContract, address: writeValue.address },
-        };
-        break;
-    }
-    fs.writeFileSync(this.pathToLogFile, JSON.stringify(log, null, 4));
-  };
-  public clearLogFile = () => {
-    this.createNewLogFile();
-  };
-  deploy = ({ deployConfig, contractName }: { deployConfig: DeployContractParams<T>; contractName: string }) => {
-    return this.locklift.factory.deployContract(deployConfig).then((res) => {
-      this.setContract({ contractName, contract: res.contract });
-      this.writeToLogFile({
-        type: "contract",
-        name: contractName,
-        deployContract: deployConfig,
+
+  deploy = ({ deployConfig, deploymentName }: { deployConfig: DeployContractParams<T>; deploymentName: string }) => {
+    return this.locklift.factory.deployContract(deployConfig).then(async (res) => {
+      this.setContractToStore({ deploymentName: deploymentName, contract: res.contract });
+      this.writeDeployInfo({
+        type: "Contract",
+        deploymentName,
+        abi: JSON.parse(res.contract.abi),
         address: res.contract.address.toString(),
+        transaction: res.tx,
+        codeHash: await res.contract.getFullState().then((res) => res.state?.codeHash),
+        contractName: deployConfig.contract as string,
+        //   @ts-ignore
+        deployContractParams: deployConfig,
       });
       return res;
     });
   };
-  loadFromLogFile = async () => {
-    const { accounts, contracts } = this.getLogContent();
 
-    if (Object.entries(accounts).length > 0) {
+  saveContract = async ({
+    deploymentName,
+    contract,
+    contractName,
+  }: {
+    deploymentName: string;
+    contract: Contract<any>;
+    contractName: keyof T;
+  }) => {
+    this.writeDeployInfo({
+      type: "Contract",
+      deploymentName,
+      address: contract.address.toString(),
+      // @ts-ignore
+
+      contractName: contractName,
+      abi: JSON.parse(contract.abi),
+      codeHash: await contract.getFullState().then((res) => res.state?.codeHash),
+    });
+    this.setContractToStore({ contract, deploymentName });
+  };
+  load = async () => {
+    const accountsAndContracts = this.getLogContent();
+    const { contracts, accounts } = {
+      accounts: accountsAndContracts.filter(({ type }) => type === "Account") as Array<
+        Extract<WriteDeployInfo, { type: "Account" }>
+      >,
+      contracts: accountsAndContracts.filter(({ type }) => type === "Contract") as Array<
+        Extract<WriteDeployInfo, { type: "Contract" }>
+      >,
+    };
+    if (accounts.length > 0) {
       await lastValueFrom(
-        from(Object.entries(accounts)).pipe(
-          mergeMap(([accountName, accountParams]) =>
+        from(accounts).pipe(
+          mergeMap((deployedAccount) =>
             defer(async () => {
-              const accountSigner = await this.locklift.keystore.getSigner(accountParams.signerId);
-              if (!accountSigner) {
-                throw new Error(`Signer id ${accountParams.signerId} not found`);
+              if (!deployedAccount.createAccountParams) {
+                return;
               }
-              if (accountSigner.publicKey !== accountParams.publicKey) {
+              const accountSigner =
+                deployedAccount.signerId && (await this.locklift.keystore.getSigner(deployedAccount.signerId));
+              if (!accountSigner) {
+                throw new Error(`Signer id ${deployedAccount.signerId} not found`);
+              }
+              if (accountSigner.publicKey !== deployedAccount.publicKey) {
                 throw new Error(
-                  `Signer ${accountParams.signerId} publicKey doesn't match with account ${accountName} publicKey, did you forgot to set seed phrase in locklift.config.ts ?`,
+                  `Signer ${deployedAccount.signerId} publicKey doesn't match with account ${deployedAccount.deploymentName} publicKey, did you forgot to set seed phrase in locklift.config.ts ?`,
                 );
               }
-              const account = await this.locklift.factory.accounts.addExistingAccount(
-                accountParams as AddExistingAccountParams,
-              );
 
-              this.setAccount({
-                accountName,
-                account: account,
+              const account = await this.locklift.factory.accounts.addExistingAccount({
+                ...deployedAccount.createAccountParams,
+                address: new Address(deployedAccount.address),
+              } as AddExistingAccountParams);
+
+              this.setAccountToStore({
+                accountName: deployedAccount.deploymentName,
+                account,
                 signer: accountSigner,
               });
             }),
@@ -111,13 +140,11 @@ export class Deployments<T extends FactoryType = FactoryType> {
       );
     }
 
-    Object.entries(contracts).forEach(([contractName, contractParams]) => {
-      this.setContract({
-        contractName: contractName,
-        contract: this.locklift.factory.getDeployedContract(
-          contractParams.deployContractParams.contract as string,
-          new Address(contractParams.address),
-        ),
+    contracts.forEach(({ deploymentName, contractName, address }) => {
+      debugger;
+      this.setContractToStore({
+        deploymentName: deploymentName,
+        contract: this.locklift.factory.getDeployedContract(contractName, new Address(address)),
       });
     });
   };
@@ -130,12 +157,17 @@ export class Deployments<T extends FactoryType = FactoryType> {
 
     const deploymentsConfig = deployFiles
       .map((file) => {
-        return require(path.join(this.deployFolderPath, file)) as {
-          default: () => Promise<any>;
-          tag: string;
-          dependencies?: Array<string>;
-        };
+        try {
+          return require(path.join(this.deployFolderPath, file)) as {
+            default: () => Promise<any>;
+            tag: string;
+            dependencies?: Array<string>;
+          };
+        } catch {
+          return undefined;
+        }
       })
+      .filter(isT)
       .map((el, idx, arr) => ({ ...el, dependenciesCount: calculateDependenciesCount(arr, el.tag, el.tag) }))
       .sort((prev, next) => prev.dependenciesCount.deep - next.dependenciesCount.deep);
 
@@ -173,8 +205,8 @@ export class Deployments<T extends FactoryType = FactoryType> {
       ),
     );
   };
-  setContract = ({ contractName, contract }: { contract: Contract<any>; contractName: string }) => {
-    this.deploymentsStore[contractName] = contract;
+  private setContractToStore = ({ deploymentName, contract }: { contract: Contract<any>; deploymentName: string }) => {
+    this.deploymentsStore[deploymentName] = contract;
   };
   getContract = <T>(contractName: string): Contract<T> => {
     debugger;
@@ -192,7 +224,7 @@ export class Deployments<T extends FactoryType = FactoryType> {
   createAccounts = async (
     accounts: Array<
       {
-        accountName: string;
+        deploymentName: string;
         accountSettings: CreateAccountParamsWithoutPk<CreateAccountParams>;
       } & { signerId: string }
     >,
@@ -201,7 +233,8 @@ export class Deployments<T extends FactoryType = FactoryType> {
       from(accounts).pipe(
         concatMap((accountSetup) =>
           defer(async () => {
-            const { accountSettings, accountName, signerId } = accountSetup;
+            const { accountSettings, deploymentName, signerId } = accountSetup;
+
             const signer = await this.locklift.keystore.getSigner(signerId).then((mayBeSigner) => {
               if (!mayBeSigner) {
                 throw new Error(`Signer with signerId ${signerId} not found`);
@@ -214,28 +247,30 @@ export class Deployments<T extends FactoryType = FactoryType> {
               ...accountSettings,
               publicKey: signer.publicKey,
             } as CreateAccountParams);
-            this.writeToLogFile({
-              type: "account",
-              name: accountName,
-              createAccount: { ...accountSettings, publicKey: signer.publicKey },
+
+            this.writeDeployInfo({
+              type: "Account",
               address: account.address.toString(),
+              deploymentName,
+              createAccountParams: { ...accountSettings, publicKey: signer.publicKey },
+              publicKey: signer.publicKey,
               signerId,
             });
-
             return {
               account,
               signer,
-              accountName,
+              deploymentName,
             };
           }),
         ),
-        tap(({ account, accountName, signer }) => {
-          this.accountsStore[accountName] = { account, signer };
+        tap(({ account, deploymentName, signer }) => {
+          this.setAccountToStore({ accountName: deploymentName, account, signer });
         }),
         toArray(),
       ),
     );
   };
+
   getAccount = (accountName: string): AccountWithSigner => {
     const accountWithSigner = this.accountsStore[accountName];
     if (!accountWithSigner) {
@@ -243,12 +278,30 @@ export class Deployments<T extends FactoryType = FactoryType> {
     }
     return accountWithSigner;
   };
+  saveAccount = async ({
+    deploymentName,
+    account,
+    signerId,
+  }: {
+    account: Account;
+    signerId: string;
+    deploymentName: string;
+  }) => {
+    const signer = await this.locklift.keystore.getSigner(signerId);
+    if (!signer) {
+      throw new Error(`Signer not found`);
+    }
+    this.writeDeployInfo({
+      type: "Account",
+      address: account.address.toString(),
+      signerId,
+      deploymentName,
+      publicKey: signer.publicKey,
+    });
+    this.setAccountToStore({ account, accountName: deploymentName, signer });
+  };
 
-  /**
-   * Low level function that provides possibility to set Accounts directly.
-   * In most of the cases you shouldn't use it
-   */
-  setAccount = ({ account, accountName, signer }: AccountWithSigner & { accountName: string }) => {
+  private setAccountToStore = ({ account, accountName, signer }: AccountWithSigner & { accountName: string }) => {
     this.accountsStore[accountName] = { account, signer };
   };
 }

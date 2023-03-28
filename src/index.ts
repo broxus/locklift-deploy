@@ -20,7 +20,11 @@ addPlugin({
     config: LockliftConfig<LockliftConfigOptions>;
     network?: string;
   }) => {
-    return new Deployments(locklift, path.resolve(config.deployments?.deployFolderName || "deploy"));
+    if (!network) {
+      throw new Error("Deployments can't ve run without network");
+    }
+    const networkID = await locklift.provider.getProviderState().then((res) => res.networkId);
+    return new Deployments(locklift, path.resolve("deployments"), network, networkID);
   },
 
   commandBuilders: [],

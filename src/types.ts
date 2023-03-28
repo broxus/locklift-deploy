@@ -19,4 +19,24 @@ export type LogStruct<T extends FactoryType> = {
   accounts: Record<string, CreateAccountParams & { signerId: string; address: string }>;
   contracts: Record<string, { deployContractParams: DeployContractParams<T>; address: string }>;
 };
+
 export type AccountWithSigner = { account: Account; signer: Signer };
+export type WriteDeployInfo = WriteDeployContractInfo | WriteDeployAccountInfo;
+export type WriteDeployAccountInfo = {
+  type: "Account";
+  deploymentName: string;
+  address: string;
+  publicKey?: string;
+  createAccountParams?: CreateAccountParams;
+  signerId?: string;
+};
+export type WriteDeployContractInfo = {
+  type: "Contract";
+  deploymentName: string;
+  contractName: string;
+  address: string;
+  abi: any;
+  codeHash?: string;
+  transaction?: any;
+  deployContractParams?: DeployContractParams;
+};

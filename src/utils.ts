@@ -28,3 +28,4 @@ export const calculateDependenciesCount = (
     { deep: 0, deps: (searchedEl.dependencies || []) as Array<string> },
   );
 };
+export const isT = <T>(p: T): p is NonNullable<T> => !!p;
