@@ -19,7 +19,11 @@ export type LogStruct<T extends FactoryType> = {
   accounts: Record<string, CreateAccountParams & { signerId: string; address: string }>;
   contracts: Record<string, { deployContractParams: DeployContractParams<T>; address: string }>;
 };
-
+export type TagFile = {
+  default: () => Promise<any>;
+  tag: string;
+  dependencies?: Array<string>;
+};
 export type AccountWithSigner = { account: Account; signer: Signer };
 export type WriteDeployInfo = WriteDeployContractInfo | WriteDeployAccountInfo;
 export type WriteDeployAccountInfo = {

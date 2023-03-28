@@ -6,6 +6,7 @@ import {
   CreateAccountParams,
   CreateAccountParamsWithoutPk,
   DeployContractParams,
+  TagFile,
   WriteDeployInfo,
 } from "./types";
 import path from "path";
@@ -23,11 +24,11 @@ export class Deployments<T extends FactoryType = FactoryType> {
   private readonly logger = new Logger();
   constructor(
     private readonly locklift: Locklift<T>,
-    private readonly deployFolderPath: string,
+    // private readonly deployFolderPath: string,
+    private readonly tags: Array<TagFile>,
     private readonly network: string,
     private readonly networkId: number,
   ) {
-    fs.ensureDirSync(path.resolve(deployFolderPath));
     this.pathToNetworkFolder = path.join("deployments", this.network);
 
     fs.ensureDirSync(this.pathToNetworkFolder);
@@ -288,20 +289,8 @@ export class Deployments<T extends FactoryType = FactoryType> {
     if (include && exclude) {
       throw new Error("includes and excludes can't be defined together");
     }
-    const deployFiles = fs.readdirSync(this.deployFolderPath);
 
-    const deploymentsConfig = deployFiles
-      .map((file) => {
-        try {
-          return require(path.join(this.deployFolderPath, file)) as {
-            default: () => Promise<any>;
-            tag: string;
-            dependencies?: Array<string>;
-          };
-        } catch {
-          return undefined;
-        }
-      })
+    const deploymentsConfig = this.tags
       .filter(isT)
       .map((el, idx, arr) => ({ ...el, dependenciesCount: calculateDependenciesCount(arr, el.tag, el.tag) }))
       .sort((prev, next) => prev.dependenciesCount.deep - next.dependenciesCount.deep);

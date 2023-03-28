@@ -5,6 +5,10 @@ import { addPlugin, ExtenderActionParams } from "locklift/plugins";
 import { PLUGIN_NAME } from "./type-extensions";
 
 import { Deployments } from "./deployments";
+import fs from "fs-extra";
+import { TagFile } from "./types";
+import { isT } from "./utils";
+
 export * from "./deployments";
 export * from "./type-extensions";
 
@@ -24,7 +28,28 @@ addPlugin({
       throw new Error("Deployments can't be run without network");
     }
     const networkID = await locklift.provider.getProviderState().then((res) => res.networkId);
-    return new Deployments(locklift, path.resolve("deploy"), network, networkID);
+    const pathToDeployFolder = path.resolve("deploy");
+    fs.ensureDirSync(pathToDeployFolder);
+    const networkDeploy = config.networks[network].deploy;
+    const deploymentsFiles = (
+      networkDeploy
+        ? networkDeploy.flatMap((folder) => {
+            const pathToFolder = path.join(pathToDeployFolder, folder);
+            if (!fs.existsSync(pathToFolder)) {
+              throw new Error(`${pathToFolder} not found`);
+            }
+            const files = fs.readdirSync(pathToFolder);
+            return { files, dir: pathToFolder };
+          })
+        : [{ dir: pathToDeployFolder, files: fs.readdirSync(pathToDeployFolder) }]
+    )
+      .flatMap(({ dir, files }) => files.map((file) => ({ file, dir })))
+      .filter(({ file }) => file.endsWith("ts"))
+      .map(({ dir, file }) => {
+        return require(path.join(dir, file)) as TagFile;
+      })
+      .filter(isT);
+    return new Deployments(locklift, deploymentsFiles, network, networkID);
   },
 
   commandBuilders: [

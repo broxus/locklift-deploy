@@ -122,6 +122,47 @@ const deployer = locklift.deployments.getAccount("Deployer");
 6. `locklift.deployments.load`_(migration)_ The `locklift-deploy` writes all deployed contracts and all created accounts to log files.
    Which is inside the `deployments/{network}` folder and called `Contract(Account)__${deployemntsName}.json`, so we can retrieve our state via this log files without redeploying anything
 
+### Deploy
+
+the deploy field override the paths.deploy option and let you define a set of folder containing the deploy scripts to be executed for this network.
+
+Note. path to the particular folder will be calculated from `deploy` folder
+
+You can thus have one network that will be executing mainnet deployment and other testnet deployments, etc...
+You could also have a folder that deploy contracts that are live on mainnet but that you need to replicate for your test or local network.
+
+Example:
+
+```typescript
+const lockliftConfig = {
+ ///
+  networks: {
+    local: {
+      deploy: [ 'deploy-local','common']
+ ///
+    },
+    test: {
+      deploy: [ 'testnet-deploy' ]
+ ///
+    }
+  }
+ ///
+}
+```
+with this config state your project structure should look like
+```
+///
+├── deploy
+│     ├── deploy-local
+│     │    └── myLocalContract.ts
+│     ├── common 
+│     │      └── commonCotract.ts
+│     └── testnet-deploy
+│           └── myTestContract.ts
+└── deployments
+      └── {network} // log folder related to the particular network
+            └── .networkInfo.json
+```
 ### Cli usage
 1. Deploy all tags
 ```shell
