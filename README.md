@@ -110,7 +110,7 @@ const deployer = locklift.deployments.getAccount("Deployer");
 ```
 #### Let dig into API provided by `locklift-deploy`
 1. `locklift.deployments.createAccounts` as the parameter it takes an array of create account config, all types of accounts supported
-2. `locklift.deployments.deploy` takes an object with two fields `deployConfig` that equals `locklift.factory.deployContract` and `contractName` this is an identifier for getting access to the contract
+2. `locklift.deployments.deploy` takes an object with two fields `deployConfig` that equals `locklift.factory.deployContract` and `deploymentName` this is an identifier for getting access to the contract
 3. `locklift.deployments.fixture(config?: { include?: Array<string>; exclude?: Array<string> })`
    this is a trigger for starting the deployment flow. This method takes the optional object as the parameter,
    it provides the possibility to control deployment flow e.g. exclude some scripts, or include some scripts. By default, all scripts will be run
