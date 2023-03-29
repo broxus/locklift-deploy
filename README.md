@@ -246,7 +246,15 @@ locklift.deployments.saveContract({
 });
 
 // save account
-locklift.deployments.saveAccount({})
+locklift.deployments.saveAccount({
+    deploymentName: "Owner"
+    signerId: "0", // locklift.keystore.getSigner("0") <--
+    address: SOME_ADDRESS,
+    accountSettings: {
+    	type: WalletTypes.EverWallet,
+    	// mSigType: "SafeMultisig/multisig2" for multisig types
+	}
+});
 ```
 
 ### Testing Deployed Contracts
