@@ -46,6 +46,7 @@ addPlugin({
       commandCreator: (command) =>
         command
           .name("deploy")
+
           .option("-t, --tags [value...]", "Tags for deploy")
           .action(async (option: ExtenderActionParams & { tags?: Array<string> }) => {
             if (option.tags && option.tags.length > 0) {
