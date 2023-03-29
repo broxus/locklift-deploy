@@ -1,3 +1,5 @@
+import dirTree, { DirectoryTree } from "directory-tree";
+
 export const calculateDependenciesCount = (
   arr: Array<{ tag: string; dependencies?: Array<string> }>,
   tag: string,
@@ -33,3 +35,24 @@ export const calculateDependenciesCount = (
   );
 };
 export const isT = <T>(p: T): p is NonNullable<T> => !!p;
+
+export function flatDirTree(tree: DirectoryTree): DirectoryTree[] | undefined {
+  return tree?.children?.reduce((acc: DirectoryTree[], current: DirectoryTree) => {
+    if (current.children === undefined) {
+      return [...acc, current];
+    }
+
+    const flatChild = flatDirTree(current);
+
+    if (!flatChild) return acc;
+
+    return [...acc, ...flatChild];
+  }, []);
+}
+export const getTagsTree = (folder: string) => {
+  const contractsNestedTree = dirTree(folder, {
+    extensions: /\.ts/,
+  });
+  console.log(contractsNestedTree);
+  return flatDirTree(contractsNestedTree);
+};
