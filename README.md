@@ -1,8 +1,49 @@
-# Locklift-deploy plugin
-The plugin provides setup environment features, like deploying contracts and setup accounts.
-### Setup plugin
-1. `npm i locklift-deploy`
-2. Update `locklift.config.ts`
+# Locklift-deploy
+
+
+<p align="center">
+  <a href="https://github.com/venom-blockchain/developer-program">
+    <img src="https://raw.githubusercontent.com/venom-blockchain/developer-program/main/vf-dev-program.png" alt="Logo" width="366.8" height="146.4">
+  </a>
+</p>
+
+<p align="center">
+    <p align="center">
+        <a href="/LICENSE">
+            <img alt="GitHub" src="https://img.shields.io/badge/license-Apache--2.0-orange" />
+        </a>
+        <a href="https://www.npmjs.com/package/locklift-deploy">
+            <img alt="npm" src="https://img.shields.io/npm/v/locklift-deploy">
+        </a>
+    </p>
+</p>
+
+
+[Locklift](https://github.com/broxus/locklift) plugin for deployments management and better testing.
+
+- [Installation](#installation)
+- [Quickstart](#quickstart)
+- [Configuration](#configuration)
+  - [Extra locklift.config networks' options](#extra-lockliftconfig-networks-options)
+    - [deploy](#deploy)
+- [How to Deploy Contracts](#how-to-deploy-accounts)
+  - [The deploy `command`](#the-deploy-command)
+  - [Deploy scripts](#deploy-scripts)
+  - [Deploying contracts](#deploying-contracts)
+  - [Deploying accounts](#deploying-accounts)
+  - [Saving external contracts to deployments](#saving-external-contracts-to-deployments)
+
+- [Testing Deployed Contracts](#testing-deployed-contracts)
+- [Tags and Dependencies](#tags-and-dependencies)
+
+### Installation
+
+```bash
+npm i locklift-deploy
+```
+
+And add the following statement to your `locklift.config.ts`:
+
 ```typescript
 import "locklift-deploy";
 import { Deployments } from "locklift-deploy";
@@ -15,160 +56,277 @@ declare module "locklift" {
 }
 ```
 
-### Usage
-First of all, need to generate deployments folders, it can be done by run the command `npx locklift deploy -n local` in a terminal.
-Inside this folder, we are going to create our first files let's call them `deploy-sample.ts` and `crate-account.ts` inside the `deploy`.
-So our project structure will look like this
-```
-├── contracts
-│   └── Sample.tsol
-├── locklift.config.ts
-├── scripts
-│   └── 1-deploy-sample.ts
-├── test
-│   └── sample-test.ts
-├── deploy
-│     ├── crate-account.ts // deploy file
-│     └── deploy-sample.ts // deploy file
-└── deployments
-      └── {network} // log folder related to the particular network
-            └── .networkInfo.json
-```
-#### Note deploy files have so particular structure, the file should include:
-1. export default function, that is returns the promise
-```typescript
-export default async () => {
-    // we will update the function body letter
-};
-```
-2. tag name
-```typescript
-export const tag = "sample1";
-```
-3. And optionally it can include dependencies array
-```typescript
-export const dependencies = ["sample2", "sample3", "sample4"];
-```
+### Quickstart
 
-#### Implementing deploy behavior for `Sample` contract that locklift generated when the project was initialized (example)
-1. Create an account in file `crate-account.ts`
-```typescript
-export default async () => {
-   await locklift.deployments.createAccounts([
-              {
-                 deploymentName: "Deployer", // custom account name, this name will be used for getting access to the account
-                 signerId: "0", // locklift.keystore.getSigner("0") <- this is id for getting access to the particular signer
-                 accountSettings: {
-                    type: WalletTypes.EverWallet,
-                    value: toNano(10),
-                 },
-              },
-           ],
-           true // enableLogs
-   );
-};
+Before going into the details, let's look at the very basic functionality of **locklift-deploy.**
 
-export const tag = "create-my-account";
-```
-2. Deploy `Sample contract` with our `Deployer` publicKey
+**locklift-deploy** allows you to write [`deploy scripts`](#deploy-scripts) in the `deploy` folder. Each of these files that look as follows will be executed in turn when you execute the following task: `locklift -n <networkName> deploy`
+
 ```typescript
+// deploy/00-deploy-sample.ts
 export default async () => {
-    const INIT_STATE = 0;
-    //we got access by our custom name that was provided when we were creating an account
-    const deployer = locklift.deployments.getAccount("Deployer");
-    // And now we are deploying via `deployments API`
+	const signer = await locklift.keystore.getSigner('0');
     await locklift.deployments.deploy({
             deployConfig: {
                 contract: "Sample",
-                publicKey: deployer.signer.publicKey,
-                initParams: {
-                    _nonce: locklift.utils.getRandomNonce(),
-                },
-                constructorParams: {
-                    _state: INIT_STATE,
-                },
-                value: locklift.utils.toNano(2),
+                publicKey: signer.publicKey,
+                initParams: { _nonce: locklift.utils.getRandomNonce() },
+                constructorParams: { _state: 123 },
+                value: locklift.utils.toNano(2)
             },
-            deploymentName: "Sample1",// custom contract name, this name will be used for getting an access
+            deploymentName: "Sample1",// user-defined custom name
         },
-        true // enableLogs
+        true // enable logs
     );
 };
 
 export const tag = "sample1";
-// we need to set `create-my-account` as a dependency. 
-// It will guarantee that account will be created earlier than this script will be run
-export const dependencies = ["create-my-account"]; 
 ```
-3. Let's move to the test folder and try to have access to our `Sample1` contract.
-   Note, deployments are lazy. So we need to trigger the deployments flow by using
-```typescript
-await locklift.deployments.fixture();
-```
-It will trigger the deployments flow, and after it, we will have access to `Deployer` account and `Sample1` contract
-```typescript
-const sample = locklift.deployments.getContract<SampleAbi>("Sample1");
-// Generic should be setted ----------------------^ // it can be found inside the factorySource.ts
-const deployer = locklift.deployments.getAccount("Deployer");
-```
-#### Let dig into API provided by `locklift-deploy`
-1. `locklift.deployments.createAccounts` as the parameter it takes an array of create account config, all types of accounts supported
-2. `locklift.deployments.deploy` takes an object with two fields `deployConfig` that equals `locklift.factory.deployContract` and `deploymentName` this is an identifier for getting access to the contract
-3. `locklift.deployments.fixture(config?: { include?: Array<string>; exclude?: Array<string> })`
-   this is a trigger for starting the deployment flow. This method takes the optional object as the parameter,
-   it provides the possibility to control deployment flow e.g. exclude some scripts, or include some scripts. By default, all scripts will be run
-4. `locklift.deployments.saveAccount` it will save the account to the deployment context and to the `Account__${deploymentName}.json` file
-5. `locklift.saveContract` it will save the contract to the deployment context and to the `Contract__${deploymentName}.json` file
-6. `locklift.deployments.load`_(migration)_ The `locklift-deploy` writes all deployed contracts and all created accounts to log files.
-   Which is inside the `deployments/{network}` folder and called `Contract(Account)__${deployemntsName}.json`, so we can retrieve our state via this log files without redeploying anything
 
-### Deploy
+Furthermore you can also ensure these scripts are executed in test too by calling `await deployments.fixture({include: ['sample1']})` in your test.
 
-the deploy field override the paths.deploy option and let you define a set of folder containing the deploy scripts to be executed for this network.
+This is a huge benefit for testing since you are not required to replicate the deployment procedure in your tests. The tag feature (as seen in the script above) and [dependencies](#tags-and-dependencies) will also make your life easier when writing complex deployment procedures.
 
-Note. path to the particular folder will be calculated from `deploy` folder
+You can even group deploy scripts in different sub folder and ensure they are executed in their logical order.
 
-You can thus have one network that will be executing mainnet deployment and other testnet deployments, etc...
+Furthermore locklift-deploy can also support a multi-chain settings with multiple deploy folder specific to each network.
+
+### Configuration
+
+#### Extra locklift.config networks' options
+
+##### deploy
+
+The deploy field override the deploy option and let you define a set of sub-folders containing the deploy scripts to be executed for exact network.
+
+You can thus have one network that will be executing mainnet deployment and other networks deployments, etc.
+
 You could also have a folder that deploy contracts that are live on mainnet but that you need to replicate for your test or local network.
 
-Example:
-
-```typescript
-const lockliftConfig = {
- ///
+```bash
+{
   networks: {
     local: {
-      deploy: [ 'deploy-local','common']
- ///
+      deploy: [ 'common/', 'deploy-local/']
     },
     test: {
-      deploy: [ 'testnet-deploy' ]
- ///
+      deploy: ['common/', 'deploy-test/']
+    },
+    main: {
+      deploy: [ 'deploy-main/' ]
     }
   }
- ///
 }
 ```
-with this config state your project structure should look like
+
+In this case, the project structure might look like this:
+
 ```
 ///
-├── deploy
-│     ├── deploy-local
-│     │    └── myLocalContract.ts
-│     ├── common 
-│     │      └── commonCotract.ts
-│     └── testnet-deploy
-│           └── myTestContract.ts
-└── deployments
-      └── {network} // log folder related to the particular network
-            └── .networkInfo.json
+deploy
+  ├── deploy-local
+  │    └── local-migration-1.ts
+  │    └── local-migration-2.ts
+  ├── common 
+  │    └── common-migration.ts
+  ├── deploy-test
+  │    └── test-migration.ts
+  └── deploy-main
+       └── main-migration.ts
 ```
-### Cli usage
-1. Deploy all tags
-```shell
-npx locklift deploy -n local
+
+### How to Deploy Contracts
+
+#### The `deploy` command
+
+`locklift --network <networkName> deploy [options and flags]`
+
+This is a new task that the `locklift-deploy` adds. As the name suggests it deploys contracts. To be exact it will look for files in the folder `deploy` or whatever was configured in `networks.<networkName>.deploy`, see [config](#deploy).
+
+It will scan for files in alphabetical order and execute them in turn.
+
+##### Options
+
+`--tags <tags>`: only execute deploy scripts with the given tags (separated by whitespaces) and their dependencies (see more info [here](#tags-and-dependecies) about tags and dependencies)
+
+#### Deploy scripts
+
+The deploy scripts need to be of the following type :
+
+```typescript
+export default async () => {
+    // out deployment code
+};
+export const tag = "sample1";
+// optional
+export const dependencies = ["sample2", "sample3", "sample4"];
 ```
-2. Deploy particular tag(s)
-```shell
-npx locklift deploy -t sample1 sample2 -n local
+
+The tags is a list of string that when the *deploy* command is executed with, the script will be executed. In other word if the deploy command is executed with a tag that does not belong to that script, that script will not be executed unless it is a dependency of a script that does get executed.
+
+The dependencies is a list of tag that will be executed if that script is executed. So if the script is executed, every script whose tag match any of the dependencies will be executed first.
+
+These set of fields allow more flexibility to organize the scripts. You are not limited to alphabetical order and you can even organise deploy script in sub folders.
+
+#### Deploying and retrieving contracts
+
+Contracts could be easily deployed and saved for further usage via `locklift.deployments.deploy` function:
+
+```typescript
+// deploy/00-deploy-sample.ts
+...
+	const signer = await locklift.keystore.getSigner('0');
+    await locklift.deployments.deploy({
+            // We use same config for regular locklift factory deployments
+            deployConfig: {
+                contract: "Sample",
+                publicKey: signer.publicKey,
+                initParams: { _nonce: locklift.utils.getRandomNonce() },
+                constructorParams: { _state: 123 },
+                value: locklift.utils.toNano(2)
+            },
+            deploymentName: "Sample1",// user-defined custom name
+        },
+        true // enable logs
+    );
+...
 ```
+
+All deploy artifacts are saved to disk now, so that you can get instance of deployed contract via `deployments.getContract<ContractAbi>(deploymentName)` in any other script:
+
+```typescript
+// 01-use-sample.ts
+...
+const sample = locklift.deployments.getContract<SampleAbi>("Sample1");
+...
+```
+
+#### Deploying and retrieving accounts
+
+Accounts could be easily deployed and saved for further usage via `locklift.deployments.deployAccounts` function:
+
+```typescript
+// deploy/02-deploy-account.ts
+...
+// multiple accounts could be deployed at once
+await locklift.deployments.createAccounts([
+      {
+         deploymentName: "Deployer", // user-defined custom account name
+         signerId: "0", // locklift.keystore.getSigner("0") <- id for getting access to the signer
+         accountSettings: {
+            type: WalletTypes.EverWallet,
+            value: locklift.utils.toNano(2),
+         },
+      },
+   ],
+   true // enableLogs
+);
+...
+```
+
+All deploy artifacts are saved to disk now, so that you can get instance of deployed account via `deployments.getAccount(deploymentName)` in any other script:
+
+```typescript
+// 03-use-account.ts
+...
+const deployer = locklift.deployments.getAccount("Deployer");
+...
+```
+
+#### Saving external contracts to deployments
+
+Sometimes we want to use contract that was deployed outside of our scripts or was deployed by internal message, for example through some kind of "factory" contract. In such a case we can use low-level method for manual saving deployment artifact:
+
+```typescript
+// save arbitrary contract
+locklift.deployments.saveContract({
+    deploymentName: "FarmingPool_WEVER-USDT",
+    contractName: "FarmingPool",
+    address: SOME_ADDRESS
+});
+
+// save account
+locklift.deployments.saveAccount({})
+```
+
+### Testing Deployed Contracts
+
+You can continue using the usual test command:
+
+```
+locklift test
+```
+
+Tests can use the `locklift.deployments.fixture(config?: { include?: Array<string>; exclude?: Array<string> })` function to run the deployment. You can also choose what tags you want/don't want to execute if you want.
+
+Here is an example of a test:
+
+```typescript
+describe('Token', () => {
+  it('testing 1 2 3', async function () {
+    // execute only 'token-deploy' tag
+    await locklift.deployments.fixture({include: ['token-deploy']});
+    const token = await locklift.deployments.getContract<TokenAbi>('Token'); // Token is available because the fixture was executed
+    console.log(token.address);
+  });
+    
+  it('testing 4 5 6', async function () {
+    // execute all tags except 'token-deploy'
+    await locklift.deployments.fixture({exclude: ['token-deploy']});
+    ...
+  });
+});
+```
+
+### Tags and Dependencies
+
+It is possible to execute only specific parts of the deployments with `locklift deploy --tags <tags>`
+
+Tags represent what the deploy script acts on. In general it will be a single string value, the name of the contract it deploys or modifies.
+
+Then if another deploy script has such tag as a dependency, then when this latter deploy script has a specific tag and that tag is requested, the dependency will be executed first.
+
+Here is an example of two deploy scripts :
+
+```typescript
+export default async () => {
+   await locklift.deployments.deployAccounts([
+          {
+             deploymentName: "Deployer",
+             signerId: "0",
+             accountSettings: {
+                type: WalletTypes.EverWallet,
+                value: toNano(10),
+             },
+          },
+       ],
+       true // enableLogs
+   );
+};
+
+export const tag = "create-account";
+```
+
+```typescript
+export default async () => {
+    const deployer = locklift.deployments.getAccount("Deployer");
+    await locklift.deployments.deploy({
+            deployConfig: {
+                contract: "Sample",
+                publicKey: deployer.signer.publicKey,
+                initParams: { _nonce: locklift.utils.getRandomNonce() },
+                constructorParams: { _state: 123 },
+                value: locklift.utils.toNano(2)
+            },
+            deploymentName: "Sample1",// user-defined custom name
+        },
+        true // enable logs
+    );
+};
+
+export const tag = "sample1";
+// this ensure the 'create-account' script above is executed first, so `deployments.getAccount('Deployer')` succeeds
+export const dependencies = ["create-account"]; 
+```
+
+As you can see the second one depends on the first. This is because the second script depends on a tag that the first script registers as using.
