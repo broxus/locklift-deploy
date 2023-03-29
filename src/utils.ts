@@ -53,6 +53,5 @@ export const getTagsTree = (folder: string) => {
   const contractsNestedTree = dirTree(folder, {
     extensions: /\.ts/,
   });
-  console.log(contractsNestedTree);
   return flatDirTree(contractsNestedTree);
 };

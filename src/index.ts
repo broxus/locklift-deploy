@@ -7,7 +7,7 @@ import { PLUGIN_NAME } from "./type-extensions";
 import { Deployments } from "./deployments";
 import fs from "fs-extra";
 import { TagFile } from "./types";
-import { getTagsTree, isT } from "./utils";
+import { getTagsTree } from "./utils";
 
 export * from "./deployments";
 export * from "./type-extensions";
@@ -38,8 +38,6 @@ addPlugin({
       }, [] as Array<string>)
       .map((pathToFile) => require(pathToFile) as TagFile);
 
-    console.log(deploymentsFiles);
-
     return new Deployments(locklift, deploymentsFiles, network, networkID);
   },
 
@@ -55,6 +53,7 @@ addPlugin({
                 include: option.tags,
               });
             }
+            await option.locklift.deployments.load();
             await option.locklift.deployments.fixture();
             process.exit(0);
           }),
