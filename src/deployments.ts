@@ -1,11 +1,12 @@
 import { FactoryType } from "locklift/internal/factory";
-import { Address, Contract, Locklift } from "locklift";
+import { Address, Contract, Locklift, WalletTypes } from "locklift";
 import {
   AccountWithSigner,
   AddExistingAccountParams,
   CreateAccountParams,
   CreateAccountParamsWithoutPk,
   DeployContractParams,
+  SaveAccount,
   TagFile,
   WriteDeployInfo,
 } from "./types";
@@ -13,7 +14,7 @@ import path from "path";
 import fs from "fs-extra";
 import { concatMap, defer, from, lastValueFrom, mergeMap, of, tap, toArray } from "rxjs";
 import { calculateDependenciesCount, isT } from "./utils";
-import { Account } from "locklift/everscale-client";
+import { Account, EverWalletAccount } from "locklift/everscale-client";
 import { Logger } from "./logger";
 
 export class Deployments<T extends FactoryType = FactoryType> {
@@ -58,7 +59,7 @@ export class Deployments<T extends FactoryType = FactoryType> {
   private getAccountOrContractFilePath = (deploymentName: string, type: "Account" | "Contract") =>
     path.join(this.pathToNetworkFolder, `${type}__${deploymentName}.json`);
 
-  private writeDeployInfo = (deployInfo: WriteDeployInfo, enableLogs: boolean) => {
+  private writeDeployInfo = <T extends AddExistingAccountParams>(deployInfo: WriteDeployInfo, enableLogs: boolean) => {
     const fileName = this.getAccountOrContractFilePath(deployInfo.deploymentName, deployInfo.type);
     fs.writeFileSync(fileName, JSON.stringify(deployInfo, null, 4));
     if (enableLogs) {
@@ -99,13 +100,17 @@ export class Deployments<T extends FactoryType = FactoryType> {
 
   saveContract = async ({
     deploymentName,
-    contract,
+    address,
     contractName,
   }: {
     deploymentName: string;
-    contract: Contract<any>;
+    address: string | Address;
     contractName: keyof T;
   }) => {
+    const contract = this.locklift.factory.getDeployedContract(
+      contractName,
+      typeof address === "string" ? new Address(address) : address,
+    );
     this.writeDeployInfo(
       {
         type: "Contract",
@@ -139,7 +144,7 @@ export class Deployments<T extends FactoryType = FactoryType> {
   //endregion
 
   //region account
-  createAccounts = async (
+  deployAccounts = async (
     accounts: Array<
       {
         deploymentName: string;
@@ -200,14 +205,17 @@ export class Deployments<T extends FactoryType = FactoryType> {
     }
     return accountWithSigner;
   };
-  saveAccount = async ({
+
+  saveAccount = async <T extends AddExistingAccountParams>({
     deploymentName,
-    account,
     signerId,
+    address,
+    accountSettings,
   }: {
-    account: Account;
+    accountSettings: SaveAccount<T>;
     signerId: string;
     deploymentName: string;
+    address: string;
   }) => {
     const signer = await this.locklift.keystore.getSigner(signerId);
     if (!signer) {
@@ -216,13 +224,21 @@ export class Deployments<T extends FactoryType = FactoryType> {
     this.writeDeployInfo(
       {
         type: "Account",
-        address: account.address.toString(),
+        address: address,
         signerId,
         deploymentName,
         publicKey: signer.publicKey,
+        saveAccountParams: accountSettings,
       },
       false,
     );
+
+    const account = await this.locklift.factory.accounts.addExistingAccount({
+      //   @ts-ignore
+      address: new Address(address),
+      publicKey: signer.publicKey,
+      ...accountSettings,
+    });
     this.setAccountToStore({ account, accountName: deploymentName, signer });
   };
 
@@ -230,7 +246,12 @@ export class Deployments<T extends FactoryType = FactoryType> {
     this.accountsStore[accountName] = { account, signer };
   };
   //endregion
-
+  reset = () => {
+    try {
+      const files = fs.readdirSync(this.pathToNetworkFolder);
+      files.forEach((file) => fs.rmSync(path.join(this.pathToNetworkFolder, file)));
+    } catch {}
+  };
   load = async () => {
     const accountsAndContracts = this.getLogContent();
     const { contracts, accounts } = {
@@ -246,9 +267,6 @@ export class Deployments<T extends FactoryType = FactoryType> {
         from(accounts).pipe(
           mergeMap((deployedAccount) =>
             defer(async () => {
-              if (!deployedAccount.createAccountParams) {
-                return;
-              }
               const accountSigner =
                 deployedAccount.signerId && (await this.locklift.keystore.getSigner(deployedAccount.signerId));
               if (!accountSigner) {
@@ -261,8 +279,9 @@ export class Deployments<T extends FactoryType = FactoryType> {
               }
 
               const account = await this.locklift.factory.accounts.addExistingAccount({
-                ...deployedAccount.createAccountParams,
+                ...(deployedAccount.createAccountParams || deployedAccount.saveAccountParams),
                 address: new Address(deployedAccount.address),
+                publicKey: accountSigner.publicKey,
               } as AddExistingAccountParams);
 
               this.setAccountToStore({

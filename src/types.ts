@@ -15,6 +15,16 @@ export type DeployContractParams<T extends FactoryType = FactoryType> = Paramete
   Locklift<T>["factory"]["deployContract"]
 >[0];
 export type AddExistingAccountParams = Parameters<Locklift<any>["factory"]["accounts"]["addExistingAccount"]>[0];
+export type SaveAccount<T extends AddExistingAccountParams> = T extends Extract<
+  AddExistingAccountParams,
+  { type: WalletTypes.HighLoadWalletV2 | WalletTypes.WalletV3 }
+>
+  ? Omit<T, "publicKey" | "address">
+  : T extends Extract<AddExistingAccountParams, { type: WalletTypes.MsigAccount }>
+  ? Omit<T, "publicKey" | "address">
+  : T extends Extract<AddExistingAccountParams, { type: WalletTypes.EverWallet }>
+  ? Omit<T, "address">
+  : never;
 export type LogStruct<T extends FactoryType> = {
   accounts: Record<string, CreateAccountParams & { signerId: string; address: string }>;
   contracts: Record<string, { deployContractParams: DeployContractParams<T>; address: string }>;
@@ -32,6 +42,7 @@ export type WriteDeployAccountInfo = {
   address: string;
   publicKey?: string;
   createAccountParams?: CreateAccountParams;
+  saveAccountParams?: SaveAccount<AddExistingAccountParams>;
   signerId?: string;
 };
 export type WriteDeployContractInfo = {
