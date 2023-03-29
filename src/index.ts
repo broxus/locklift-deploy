@@ -3,6 +3,7 @@ import { Locklift, LockliftConfig } from "locklift";
 import path from "path";
 import { addPlugin, ExtenderActionParams } from "locklift/plugins";
 import { PLUGIN_NAME } from "./type-extensions";
+import commander from "commander";
 
 import { Deployments } from "./deployments";
 import fs from "fs-extra";
@@ -11,7 +12,7 @@ import { getTagsTree } from "./utils";
 
 export * from "./deployments";
 export * from "./type-extensions";
-
+const program = new commander.Command("");
 type LockliftConfigOptions = Locklift<any> extends Locklift<infer F> ? F : never;
 addPlugin({
   pluginName: PLUGIN_NAME,
@@ -48,14 +49,22 @@ addPlugin({
           .name("deploy")
 
           .option("-t, --tags [value...]", "Tags for deploy")
-          .action(async (option: ExtenderActionParams & { tags?: Array<string> }) => {
+          .option("-r, --reset", "Reset deployments store")
+          .action(async (option: ExtenderActionParams & { tags?: Array<string>; reset?: boolean }) => {
+            if (option.reset) {
+              option.locklift.deployments.reset();
+              process.exit(0);
+            }
+
+            await option.locklift.deployments.load();
+
             if (option.tags && option.tags.length > 0) {
-              return option.locklift.deployments.fixture({
+              await option.locklift.deployments.fixture({
                 include: option.tags,
               });
+            } else {
+              await option.locklift.deployments.fixture();
             }
-            await option.locklift.deployments.load();
-            await option.locklift.deployments.fixture();
             process.exit(0);
           }),
     },
