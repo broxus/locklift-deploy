@@ -98,15 +98,18 @@ export class Deployments<T extends FactoryType = FactoryType> {
     });
   };
 
-  saveContract = async ({
-    deploymentName,
-    address,
-    contractName,
-  }: {
-    deploymentName: string;
-    address: string | Address;
-    contractName: keyof T;
-  }) => {
+  saveContract = async (
+    {
+      deploymentName,
+      address,
+      contractName,
+    }: {
+      deploymentName: string;
+      address: string | Address;
+      contractName: keyof T;
+    },
+    enableLogs = false,
+  ) => {
     const contract = this.locklift.factory.getDeployedContract(
       contractName,
       typeof address === "string" ? new Address(address) : address,
@@ -122,7 +125,7 @@ export class Deployments<T extends FactoryType = FactoryType> {
         abi: JSON.parse(contract.abi),
         codeHash: await contract.getFullState().then((res) => res.state?.codeHash),
       },
-      false,
+      enableLogs,
     );
     this.setContractToStore({ contract, deploymentName });
   };
@@ -148,7 +151,7 @@ export class Deployments<T extends FactoryType = FactoryType> {
     accounts: Array<
       {
         deploymentName: string;
-        accountSettings: CreateAccountParamsWithoutPk<CreateAccountParams>;
+        accountSettings: CreateAccountParamsWithoutPk<T>;
       } & { signerId: string }
     >,
     enableLogs = false,
@@ -170,14 +173,17 @@ export class Deployments<T extends FactoryType = FactoryType> {
             const { account } = await this.locklift.factory.accounts.addNewAccount({
               ...accountSettings,
               publicKey: signer.publicKey,
-            } as CreateAccountParams);
+            } as CreateAccountParams<T>);
 
             this.writeDeployInfo(
               {
                 type: "Account",
                 address: account.address.toString(),
                 deploymentName,
-                createAccountParams: { ...accountSettings, publicKey: signer.publicKey },
+                createAccountParams: {
+                  ...accountSettings,
+                  publicKey: signer.publicKey,
+                } as CreateAccountParams<FactoryType>,
                 publicKey: signer.publicKey,
                 signerId,
               },
@@ -206,17 +212,20 @@ export class Deployments<T extends FactoryType = FactoryType> {
     return accountWithSigner;
   };
 
-  saveAccount = async <T extends AddExistingAccountParams>({
-    deploymentName,
-    signerId,
-    address,
-    accountSettings,
-  }: {
-    accountSettings: SaveAccount<T>;
-    signerId: string;
-    deploymentName: string;
-    address: string;
-  }) => {
+  saveAccount = async <T extends AddExistingAccountParams>(
+    {
+      deploymentName,
+      signerId,
+      address,
+      accountSettings,
+    }: {
+      accountSettings: SaveAccount<T>;
+      signerId: string;
+      deploymentName: string;
+      address: string;
+    },
+    enableLogs = false,
+  ) => {
     const signer = await this.locklift.keystore.getSigner(signerId);
     if (!signer) {
       throw new Error(`Signer not found`);
@@ -230,7 +239,7 @@ export class Deployments<T extends FactoryType = FactoryType> {
         publicKey: signer.publicKey,
         saveAccountParams: accountSettings,
       },
-      false,
+      enableLogs,
     );
 
     const account = await this.locklift.factory.accounts.addExistingAccount({

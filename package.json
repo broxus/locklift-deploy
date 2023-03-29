@@ -1,6 +1,6 @@
 {
   "name": "locklift-deploy",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Locklift plugin for replicable deployments and easy testing",
   "main": "dist/index.js",
   "scripts": {

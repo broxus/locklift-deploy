@@ -139,7 +139,7 @@ deploy
 
 #### The `deploy` command
 
-`locklift --network <networkName> deploy [options and flags]`
+`locklift deploy --network <networkName> [options and flags]`
 
 This is a new task that the `locklift-deploy` adds. As the name suggests it deploys contracts. To be exact it will look for files in the folder `deploy` or whatever was configured in `networks.<networkName>.deploy`, see [config](#deploy).
 
@@ -175,7 +175,7 @@ Contracts could be easily deployed and saved for further usage via `locklift.dep
 ```typescript
 // deploy/00-deploy-sample.ts
 ...
-	const signer = await locklift.keystore.getSigner('0');
+    const signer = (await locklift.keystore.getSigner('0'))!;
     await locklift.deployments.deploy({
             // We use same config for regular locklift factory deployments
             deployConfig: {
@@ -209,7 +209,7 @@ Accounts could be easily deployed and saved for further usage via `locklift.depl
 // deploy/02-deploy-account.ts
 ...
 // multiple accounts could be deployed at once
-await locklift.deployments.createAccounts([
+await locklift.deployments.deployAccounts([
       {
          deploymentName: "Deployer", // user-defined custom account name
          signerId: "0", // locklift.keystore.getSigner("0") <- id for getting access to the signer
@@ -229,7 +229,7 @@ All deploy artifacts are saved to disk now, so that you can get instance of depl
 ```typescript
 // 03-use-account.ts
 ...
-const deployer = locklift.deployments.getAccount("Deployer");
+const deployer = locklift.deployments.getAccount("Deployer").account;
 ...
 ```
 
@@ -317,7 +317,7 @@ export const tag = "create-account";
 
 ```typescript
 export default async () => {
-    const deployer = locklift.deployments.getAccount("Deployer");
+    const deployer = locklift.deployments.getAccount("Deployer").account;
     await locklift.deployments.deploy({
             deployConfig: {
                 contract: "Sample",
