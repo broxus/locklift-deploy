@@ -1,14 +1,28 @@
 {
   "name": "locklift-deploy",
   "version": "1.0.0",
-  "description": "",
+  "description": "Locklift plugin for replicable deployments and easy testing",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc --build .",
-    "start": "ts-node --transpile-only src/index.ts"
+    "start": "ts-node --transpile-only src/index.ts",
+    "prepublishOnly": "npm run build"
   },
   "author": "",
-  "license": "ISC",
+  "keywords": [
+    "everscale",
+    "blockchain",
+    "smart-contracts",
+    "javascript",
+    "solidity",
+    "dapps",
+    "ethereum",
+    "locklift",
+    "locklift-plugin",
+    "venom-blockchain",
+    "venom-developer-program"
+  ],
+  "license": "Apache-2.0",
   "dependencies": {
     "@types/commander": "^2.12.2",
     "@types/fs-extra": "^11.0.1",

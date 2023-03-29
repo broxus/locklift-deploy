@@ -24,15 +24,15 @@
 - [Installation](#installation)
 - [Quickstart](#quickstart)
 - [Configuration](#configuration)
-  - [Extra locklift.config networks' options](#extra-lockliftconfig-networks-options)
-    - [deploy](#deploy)
+  - [**Extra locklift.config networks' options**](#extra-lockliftconfig-networks-options)
+    - [`deploy`](#deploy)
 - [How to Deploy Contracts](#how-to-deploy-accounts)
   - [The deploy `command`](#the-deploy-command)
+    - [**Options**](#options)
   - [Deploy scripts](#deploy-scripts)
   - [Deploying contracts](#deploying-contracts)
   - [Deploying accounts](#deploying-accounts)
   - [Saving external contracts to deployments](#saving-external-contracts-to-deployments)
-
 - [Testing Deployed Contracts](#testing-deployed-contracts)
 - [Tags and Dependencies](#tags-and-dependencies)
 
