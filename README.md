@@ -247,7 +247,7 @@ locklift.deployments.saveContract({
 
 // save account
 locklift.deployments.saveAccount({
-    deploymentName: "Owner"
+    deploymentName: "Owner",
     signerId: "0", // locklift.keystore.getSigner("0") <--
     address: SOME_ADDRESS,
     accountSettings: {
