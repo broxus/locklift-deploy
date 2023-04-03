@@ -52,6 +52,9 @@ addPlugin({
           .option("-t, --tags [value...]", "Tags for deploy")
           .option("-r, --reset", "Reset deployments store")
           .action(async (option: ExtenderActionParams & { tags?: Array<string>; reset?: boolean }) => {
+            if (!option.network) {
+              throw new Error("Deployments can't be run without network");
+            }
             if (option.reset) {
               option.locklift.deployments.reset();
               process.exit(0);
