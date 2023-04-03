@@ -26,7 +26,8 @@ addPlugin({
     network?: string;
   }) => {
     if (!network) {
-      throw new Error("Deployments can't be run without network");
+      return;
+      // throw new Error("Deployments can't be run without network");
     }
     const networkID = await locklift.provider.getProviderState().then((res) => res.networkId);
     const pathToDeployFolder = path.resolve("deploy");
