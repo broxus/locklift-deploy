@@ -12,8 +12,10 @@ import { getTagsTree } from "./utils";
 
 export * from "./deployments";
 export * from "./type-extensions";
+
 const program = new commander.Command("");
 type LockliftConfigOptions = Locklift<any> extends Locklift<infer F> ? F : never;
+
 addPlugin({
   pluginName: PLUGIN_NAME,
   initializer: async ({
@@ -48,7 +50,7 @@ addPlugin({
       commandCreator: (command) =>
         command
           .name("deploy")
-
+          .option("--disable-build", "Disable automatic contracts build", false)
           .option("-t, --tags [value...]", "Tags for deploy")
           .option("-r, --reset", "Reset deployments store")
           .action(async (option: ExtenderActionParams & { tags?: Array<string>; reset?: boolean }) => {
@@ -71,6 +73,7 @@ addPlugin({
             }
             process.exit(0);
           }),
+      skipSteps: { build: process.argv.includes('--disable-build') },
     },
   ],
 });
