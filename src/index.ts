@@ -48,7 +48,7 @@ addPlugin({
       commandCreator: (command) =>
         command
           .name("deploy")
-
+          .option("--disable-build", "Disable automatic contracts build", false)
           .option("-t, --tags [value...]", "Tags for deploy")
           .option("-r, --reset", "Reset deployments store")
           .action(async (option: ExtenderActionParams & { tags?: Array<string>; reset?: boolean }) => {
@@ -71,6 +71,7 @@ addPlugin({
             }
             process.exit(0);
           }),
+      skipSteps: { build: process.argv.includes("--disable-build") },
     },
   ],
 });

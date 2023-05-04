@@ -1,5 +1,5 @@
 import { FactoryType } from "locklift/internal/factory";
-import { Address, Contract, Locklift, WalletTypes } from "locklift";
+import { Address, Contract, Locklift } from "locklift";
 import {
   AccountWithSigner,
   AddExistingAccountParams,
@@ -14,7 +14,6 @@ import path from "path";
 import fs from "fs-extra";
 import { concatMap, defer, from, lastValueFrom, mergeMap, of, tap, toArray } from "rxjs";
 import { calculateDependenciesCount, isT } from "./utils";
-import { Account, EverWalletAccount } from "locklift/everscale-client";
 import { Logger } from "./logger";
 
 export class Deployments<T extends FactoryType = FactoryType> {
@@ -137,7 +136,7 @@ export class Deployments<T extends FactoryType = FactoryType> {
     const contract = this.deploymentsStore[contractName];
     if (!contract) {
       throw new Error(
-        `Contract ${contractName} not fount in deployments store\nList of deployed contracts: \n${Object.keys(
+        `Contract ${contractName} not found in deployments store\nList of deployed contracts: \n${Object.keys(
           this.deploymentsStore,
         ).join("\n")}`,
       );
@@ -259,6 +258,9 @@ export class Deployments<T extends FactoryType = FactoryType> {
     try {
       const files = fs.readdirSync(this.pathToNetworkFolder);
       files.forEach((file) => fs.rmSync(path.join(this.pathToNetworkFolder, file)));
+      // reset stores
+      this.deploymentsStore = {};
+      this.accountsStore = {};
     } catch {}
   };
   load = async () => {

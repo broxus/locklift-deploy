@@ -1,4 +1,5 @@
 import { WriteDeployInfo } from "./types";
+import { WalletTypes } from "locklift";
 
 export class Logger {
   printLog = (info: WriteDeployInfo) => {
@@ -8,8 +9,12 @@ export class Logger {
       );
     }
     if (info.type === "Account") {
+      const walletType = info.createAccountParams?.type
+        ? WalletTypes[info.createAccountParams.type]
+        : "UnrecognizedWallet";
+
       console.log(
-        `Account type ${info.createAccountParams?.type} deployed, address: ${info.address}, deploymentName: ${info.deploymentName}`,
+        `Account type ${walletType} deployed, address: ${info.address}, deploymentName: ${info.deploymentName}`,
       );
     }
   };
