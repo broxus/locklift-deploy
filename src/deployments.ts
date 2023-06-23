@@ -6,6 +6,8 @@ import {
   CreateAccountParams,
   CreateAccountParamsWithoutPk,
   DeployContractParams,
+  DeployContractResponse,
+  DeployType,
   SaveAccount,
   TagFile,
   WriteDeployInfo,
@@ -15,10 +17,16 @@ import fs from "fs-extra";
 import { concatMap, defer, from, lastValueFrom, mergeMap, of, tap, toArray } from "rxjs";
 import { calculateDependenciesCount, isT } from "./utils";
 import { Logger } from "./logger";
+import { Transaction } from "locklift/everscale-provider";
+import _ from "lodash";
 
 export class Deployments<T extends FactoryType = FactoryType> {
   deploymentsStore: Record<string, Contract<any>> = {};
   accountsStore: Record<string, AccountWithSigner> = {};
+  private deployTypeSettings: { type: DeployType; forceDeploy: boolean } = {
+    type: DeployType.FIXTURE,
+    forceDeploy: true,
+  };
   // private readonly pathToLogFile: string;
   private readonly pathToNetworkFolder: string;
   private readonly logger = new Logger();
@@ -59,15 +67,31 @@ export class Deployments<T extends FactoryType = FactoryType> {
     path.join(this.pathToNetworkFolder, `${type}__${deploymentName}.json`);
 
   private writeDeployInfo = <T extends AddExistingAccountParams>(deployInfo: WriteDeployInfo, enableLogs: boolean) => {
-    const fileName = this.getAccountOrContractFilePath(deployInfo.deploymentName, deployInfo.type);
-    fs.writeFileSync(fileName, JSON.stringify(deployInfo, null, 4));
+    if (this.deployTypeSettings.type === DeployType.DEPLOY) {
+      const fileName = this.getAccountOrContractFilePath(deployInfo.deploymentName, deployInfo.type);
+      fs.writeFileSync(fileName, JSON.stringify(deployInfo, null, 4));
+    }
     if (enableLogs) {
-      this.logger.printLog(deployInfo);
+      this.logger.printDeployLog(deployInfo);
     }
   };
+  needToRedeploy = (deploymentsName: string, type: "Contract" | "Account"): boolean => {
+    if (this.deployTypeSettings.forceDeploy) {
+      return true;
+    }
+    if (type === "Contract") {
+      return !this.deploymentsStore[deploymentsName];
+    }
+    return !this.accountsStore[deploymentsName];
 
+    // return (
+    //   this.deployTypeSettings.forceDeploy &&
+    //   this.deployTypeSettings.type === DeployType.DEPLOY &&
+    //   (!!this.deploymentsStore[deploymentsName] || !!this.accountsStore[deploymentsName])
+    // );
+  };
   //region contract
-  deploy = ({
+  deploy = async ({
     deployConfig,
     deploymentName,
     enableLogs = false,
@@ -75,26 +99,54 @@ export class Deployments<T extends FactoryType = FactoryType> {
     deployConfig: DeployContractParams<T>;
     deploymentName: string;
     enableLogs?: boolean;
-  }) => {
-    return this.locklift.factory.deployContract(deployConfig).then(async (res) => {
-      this.setContractToStore({ deploymentName: deploymentName, contract: res.contract });
-
-      this.writeDeployInfo(
-        {
+  }): Promise<DeployContractResponse<T>> => {
+    if (!this.needToRedeploy(deploymentName, "Contract")) {
+      const contract = this.deploymentsStore[deploymentName];
+      if (enableLogs) {
+        this.logger.printRetrievedLog({
           type: "Contract",
+          address: this.deploymentsStore[deploymentName].address.toString(),
           deploymentName,
-          abi: JSON.parse(res.contract.abi),
-          address: res.contract.address.toString(),
-          transaction: res.tx,
-          codeHash: await res.contract.getFullState().then((res) => res.state?.codeHash),
-          contractName: deployConfig.contract as string,
-          //   @ts-ignore
-          deployContractParams: deployConfig,
-        },
-        enableLogs,
-      );
-      return res;
-    });
+        });
+      }
+      return {
+        contract: contract as unknown as Contract<T[keyof T]>,
+        newlyDeployed: false,
+        tx: undefined,
+      };
+    }
+
+    return this.locklift.factory.deployContract(deployConfig).then(
+      async (
+        res,
+      ): Promise<{
+        contract: Contract<T[keyof T]>;
+        tx: { transaction: Transaction; output?: Record<string, unknown> | undefined };
+        newlyDeployed: true;
+      }> => {
+        this.setContractToStore({ deploymentName: deploymentName, contract: res.contract });
+
+        this.writeDeployInfo(
+          {
+            type: "Contract",
+            deploymentName,
+            abi: JSON.parse(res.contract.abi),
+            address: res.contract.address.toString(),
+            transaction: res.tx,
+            codeHash: await res.contract.getFullState().then((res) => res.state?.codeHash),
+            contractName: deployConfig.contract as string,
+            //   @ts-ignore
+            deployContractParams: deployConfig,
+          },
+          enableLogs,
+        );
+        return {
+          contract: res.contract,
+          tx: res.tx,
+          newlyDeployed: true,
+        };
+      },
+    );
   };
 
   saveContract = async (
@@ -132,7 +184,6 @@ export class Deployments<T extends FactoryType = FactoryType> {
     this.deploymentsStore[deploymentName] = contract;
   };
   getContract = <T>(contractName: string): Contract<T> => {
-    debugger;
     const contract = this.deploymentsStore[contractName];
     if (!contract) {
       throw new Error(
@@ -147,12 +198,12 @@ export class Deployments<T extends FactoryType = FactoryType> {
 
   //region account
   deployAccounts = async (
-    accounts: Array<
-      {
-        deploymentName: string;
-        accountSettings: CreateAccountParamsWithoutPk<T>;
-      } & { signerId: string }
-    >,
+    accounts: Array<{
+      deploymentName: string;
+      accountSettings: CreateAccountParamsWithoutPk<T>;
+      signerId: string;
+      newlyDeployed: boolean;
+    }>,
     enableLogs = false,
   ): Promise<Array<AccountWithSigner>> => {
     return lastValueFrom(
@@ -161,13 +212,28 @@ export class Deployments<T extends FactoryType = FactoryType> {
           defer(async () => {
             const { accountSettings, deploymentName, signerId } = accountSetup;
 
+            if (!this.needToRedeploy(deploymentName, "Account")) {
+              const { account, signer } = this.accountsStore[deploymentName];
+              if (enableLogs) {
+                this.logger.printRetrievedLog({
+                  type: "Account",
+                  address: account.address.toString(),
+                  deploymentName,
+                });
+                return {
+                  account: account,
+                  signer,
+                  deploymentName,
+                  newlyDeployed: false,
+                };
+              }
+            }
             const signer = await this.locklift.keystore.getSigner(signerId).then((mayBeSigner) => {
               if (!mayBeSigner) {
                 throw new Error(`Signer with signerId ${signerId} not found`);
               }
               return mayBeSigner;
             });
-
             // @ts-ignore
             const { account } = await this.locklift.factory.accounts.addNewAccount({
               ...accountSettings,
@@ -192,6 +258,7 @@ export class Deployments<T extends FactoryType = FactoryType> {
               account,
               signer,
               deploymentName,
+              newlyDeployed: true,
             };
           }),
         ),
@@ -307,14 +374,32 @@ export class Deployments<T extends FactoryType = FactoryType> {
     }
 
     contracts.forEach(({ deploymentName, contractName, address }) => {
-      debugger;
       this.setContractToStore({
         deploymentName: deploymentName,
         contract: this.locklift.factory.getDeployedContract(contractName, new Address(address)),
       });
     });
   };
-  fixture = async (fixtureConfig?: { include?: Array<string>; exclude?: Array<string> }) => {
+
+  fixture = (fixtureConfig?: { include?: Array<string>; exclude?: Array<string> }) => {
+    this.deployTypeSettings = {
+      forceDeploy: true,
+      type: DeployType.FIXTURE,
+    };
+    return this._deployTags(fixtureConfig);
+  };
+  private deployTags = (fixtureConfig?: {
+    include?: Array<string>;
+    exclude?: Array<string>;
+    isForceDeploy: boolean;
+  }) => {
+    this.deployTypeSettings = {
+      forceDeploy: fixtureConfig?.isForceDeploy || false,
+      type: DeployType.DEPLOY,
+    };
+    return this._deployTags(fixtureConfig);
+  };
+  private _deployTags = async (fixtureConfig?: { include?: Array<string>; exclude?: Array<string> }) => {
     const { include, exclude } = fixtureConfig || {};
     if (include && exclude) {
       throw new Error("includes and excludes can't be defined together");
@@ -322,34 +407,31 @@ export class Deployments<T extends FactoryType = FactoryType> {
 
     const deploymentsConfig = this.tags
       .filter(isT)
-      .map((el, idx, arr) => ({ ...el, dependenciesCount: calculateDependenciesCount(arr, el.tag, el.tag) }))
-      .sort((prev, next) => prev.dependenciesCount.deep - next.dependenciesCount.deep);
+      .map((el, idx, arr) => ({ ...el, dependenciesCount: calculateDependenciesCount(arr, el.tag, el.tag) }));
 
-    const includedDependencies = include
+    const includedTags = include
       ? deploymentsConfig.filter(({ tag }) => include.some((include) => tag === include))
       : exclude
       ? deploymentsConfig.filter(({ tag }) => !exclude.some((exclude) => exclude === tag))
       : deploymentsConfig;
 
-    const notResolvedDependencies = includedDependencies
-      .map((deployment) => ({
-        ...deployment,
-        canBeInitialized:
-          !deployment.dependencies ||
-          deployment.dependencies.some((dependency) =>
-            includedDependencies.some((included) => dependency === included.tag),
-          ),
-      }))
-      .filter(({ canBeInitialized }) => !canBeInitialized);
+    const includedTagsWithDeps = _(
+      includedTags.reduce((acc, deployment) => {
+        acc.push(deployment);
 
-    if (notResolvedDependencies.length > 0) {
-      throw new Error(
-        `${notResolvedDependencies.map(({ tag }) => `Tag ${tag} can't be initialized without required dependencies`)}`,
-      );
-    }
-    if (includedDependencies.length > 0) {
+        if ((deployment.dependencies || []).length > 0) {
+          acc.push(...deploymentsConfig.filter(({ tag }) => deployment.dependencies?.includes(tag)));
+        }
+        return acc;
+      }, [] as typeof includedTags),
+    )
+      .unionBy("tag")
+      .sort((prev, next) => prev.dependenciesCount.deep - next.dependenciesCount.deep)
+      .value();
+
+    if (includedTagsWithDeps.length > 0) {
       await lastValueFrom(
-        from(includedDependencies).pipe(
+        from(includedTagsWithDeps).pipe(
           concatMap(({ default: deployFunction, tag }) => {
             if (deployFunction && "name" in deployFunction) {
               return deployFunction();

@@ -50,8 +50,9 @@ addPlugin({
           .name("deploy")
           .option("--disable-build", "Disable automatic contracts build", false)
           .option("-t, --tags [value...]", "Tags for deploy")
+          .option("-f, --force", "Force deploy")
           .option("-r, --reset", "Reset deployments store")
-          .action(async (option: ExtenderActionParams & { tags?: Array<string>; reset?: boolean }) => {
+          .action(async (option: ExtenderActionParams & { tags?: Array<string>; reset?: boolean; force?: boolean }) => {
             if (!option.network) {
               throw new Error("Deployments can't be run without network");
             }
@@ -63,11 +64,14 @@ addPlugin({
             await option.locklift.deployments.load();
 
             if (option.tags && option.tags.length > 0) {
-              await option.locklift.deployments.fixture({
+              await option.locklift.deployments["deployTags"]({
                 include: option.tags,
+                isForceDeploy: !!option.force,
               });
             } else {
-              await option.locklift.deployments.fixture();
+              await option.locklift.deployments["deployTags"]({
+                isForceDeploy: !!option.force,
+              });
             }
             process.exit(0);
           }),

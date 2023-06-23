@@ -2,7 +2,7 @@ import { WriteDeployInfo } from "./types";
 import { WalletTypes } from "locklift";
 
 export class Logger {
-  printLog = (info: WriteDeployInfo) => {
+  printDeployLog = (info: WriteDeployInfo) => {
     if (info.type === "Contract") {
       console.log(
         `Contract ${info.contractName} deployed, address: ${info.address}, deploymentName: ${info.deploymentName}`,
@@ -17,5 +17,9 @@ export class Logger {
         `Account type ${walletType} deployed, address: ${info.address}, deploymentName: ${info.deploymentName}`,
       );
     }
+  };
+
+  printRetrievedLog = (info: { type: "Contract" | "Account"; address: string; deploymentName: string }) => {
+    console.log(`${info.type} retrieved, address: ${info.address}, deploymentName: ${info.deploymentName}`);
   };
 }

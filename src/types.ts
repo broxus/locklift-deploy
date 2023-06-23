@@ -1,6 +1,7 @@
-import { Locklift, Signer, WalletTypes } from "locklift";
+import { Contract, Locklift, Signer, WalletTypes } from "locklift";
 import { FactoryType } from "locklift/internal/factory";
 import { Account } from "locklift/everscale-client";
+import { Transaction } from "locklift/everscale-provider";
 
 export type CreateAccountParams<T extends FactoryType> = Parameters<
   Locklift<T>["factory"]["accounts"]["addNewAccount"]
@@ -61,3 +62,16 @@ export type WriteDeployContractInfo = {
   transaction?: any;
   deployContractParams?: DeployContractParams;
 };
+
+export enum DeployType {
+  FIXTURE = "FIXTURE",
+  DEPLOY = "DEPLOY",
+}
+
+export type DeployContractResponse<T extends FactoryType> =
+  | {
+      contract: Contract<T[keyof T]>;
+    } & (
+      | { tx: { transaction: Transaction; output?: Record<string, unknown> | undefined }; newlyDeployed: true }
+      | { tx: undefined; newlyDeployed: false }
+    );
