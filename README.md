@@ -12,8 +12,8 @@
         <a href="/LICENSE">
             <img alt="GitHub" src="https://img.shields.io/badge/license-Apache--2.0-orange" />
         </a>
-        <a href="https://www.npmjs.com/package/locklift-deploy">
-            <img alt="npm" src="https://img.shields.io/npm/v/locklift-deploy">
+        <a href="https://www.npmjs.com/package/@broxus/locklift-deploy">
+            <img alt="npm" src="https://img.shields.io/npm/v/@broxus/locklift-deploy">
         </a>
     </p>
 </p>
@@ -39,14 +39,14 @@
 ### Installation
 
 ```bash
-npm i locklift-deploy
+npm i @broxus/locklift-deploy
 ```
 
 And add the following statement to your `locklift.config.ts`:
 
 ```typescript
-import "locklift-deploy";
-import { Deployments } from "locklift-deploy";
+import "@broxus/locklift-deploy";
+import { Deployments } from "@broxus/locklift-deploy";
 
 declare module "locklift" {
     //@ts-ignore
