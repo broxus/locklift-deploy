@@ -40,7 +40,9 @@ addPlugin({
       }, [] as Array<string>)
       .map((pathToFile) => require(pathToFile) as TagFile);
 
-    return new Deployments(locklift, deploymentsFiles, network, networkID);
+    const deployments = new Deployments(locklift, deploymentsFiles, network, networkID);
+    await deployments.load();
+    return deployments;
   },
 
   commandBuilders: [
@@ -60,8 +62,6 @@ addPlugin({
               option.locklift.deployments.reset();
               process.exit(0);
             }
-
-            await option.locklift.deployments.load();
 
             if (option.tags && option.tags.length > 0) {
               await option.locklift.deployments["deployTags"]({

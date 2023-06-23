@@ -24,8 +24,8 @@ export class Deployments<T extends FactoryType = FactoryType> {
   deploymentsStore: Record<string, Contract<any>> = {};
   accountsStore: Record<string, AccountWithSigner> = {};
   private deployTypeSettings: { type: DeployType; forceDeploy: boolean } = {
-    type: DeployType.FIXTURE,
-    forceDeploy: true,
+    type: DeployType.DEPLOY,
+    forceDeploy: false,
   };
   // private readonly pathToLogFile: string;
   private readonly pathToNetworkFolder: string;
