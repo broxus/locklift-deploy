@@ -202,7 +202,6 @@ export class Deployments<T extends FactoryType = FactoryType> {
       deploymentName: string;
       accountSettings: CreateAccountParamsWithoutPk<T>;
       signerId: string;
-      newlyDeployed: boolean;
     }>,
     enableLogs = false,
   ): Promise<Array<AccountWithSigner>> => {
